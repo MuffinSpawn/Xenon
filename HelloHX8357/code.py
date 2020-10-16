@@ -16,8 +16,11 @@ import terminalio
 
 def main():
     spi = board.SPI()
+    sd_path = '/sd'
 
-    display = setup_display(spi)
+    mount_sd_card(spi, sd_path)
+
+    display = setup_display(spi, sd_path)
 
     touch_screen = setup_touch_screen(spi)
 
@@ -38,7 +41,15 @@ def main():
             print(touch_screen.read_data())
 
 
-def setup_display(spi):
+def mount_sd_card(spi, mount_point):
+    cs = digitalio.DigitalInOut(board.D2)
+    sdcard = adafruit_sdcard.SDCard(spi, cs)
+    sd_card_fs = storage.VfsFat(sdcard)
+
+    storage.mount(sd_card_fs, mount_point)
+
+
+def setup_display(spi, sd_path):
     # Release any resources currently in use for the displays
     displayio.release_displays()
 
@@ -51,8 +62,26 @@ def setup_display(spi):
 
     # Make the display context
     # splash = displayio.Group(max_size=10)
-    splash = displayio.Group()
-    display.show(splash)
+    # Button: 123 × 63
+
+    image, palette = adafruit_imageload.load(
+        sd_path + '/keypad_button_unpressed.bmp',
+        bitmap=displayio.Bitmap,
+        palette=displayio.Palette
+    )
+    print('Image Dimensions: ' + str(image.width) + ', ' + str(image.height))
+    button_coordinates = [(j*(image.width+2), i*(image.height+2)) for i in range(5) for j in range(4)]
+    print('Button Coordinates: ' + str(button_coordinates))
+    buttons = [create_button(image, palette, x=x, y=y) for x, y in button_coordinates]
+    keypad = displayio.Group(max_size=len(buttons))
+
+    for button in buttons:
+        keypad.append(button)
+
+    display.show(keypad)
+
+    # splash = displayio.Group()
+    # display.show(splash)
 
     # color_bitmap = displayio.Bitmap(480, 320, 1)
     # color_palette = displayio.Palette(1)
@@ -75,16 +104,19 @@ def setup_display(spi):
     # text_group.append(text_area)  # Subgroup for text scaling
     # splash.append(text_group)
 
-    mount_sd_card(spi, "/sd")
     import gc
-    # print(gc.mem_free())
+    print(gc.mem_free())
+    # import sys
+    # sys.exit(1)
 
-    image, palette = adafruit_imageload.load(
-        "/sd/keypad_small.bmp", bitmap=displayio.Bitmap, palette=displayio.Palette
-    )
-    tile_grid = displayio.TileGrid(image, pixel_shader=palette)
-
-    splash.append(tile_grid)
+    # image, palette = adafruit_imageload.load(
+    #     "/sd/keypad_small.bmp",
+    #     bitmap=displayio.Bitmap,
+    #     palette=displayio.Palette
+    # )
+    # tile_grid = displayio.TileGrid(image, pixel_shader=palette)
+    #
+    # splash.append(tile_grid)
 
     return display
 
@@ -116,11 +148,12 @@ def meters_from_counts(counts):
     return y_intercept + slope * counts
 
 
-def mount_sd_card(spi, mount_point):
-    cs = digitalio.DigitalInOut(board.D2)
-    sdcard = adafruit_sdcard.SDCard(spi, cs)
-    sd_card_fs = storage.VfsFat(sdcard)
+def create_button(image, palette, x=0, y=0):
+    button = displayio.Group(x=x, y=y)
+    tile_grid = displayio.TileGrid(image, pixel_shader=palette)
 
-    storage.mount(sd_card_fs, mount_point)
+    button.append(tile_grid)
+
+    return button
 
 main()
